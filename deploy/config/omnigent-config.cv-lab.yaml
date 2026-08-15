@@ -1,0 +1,51 @@
+# Additions for ~/.omnigent/config.yaml — cv-lab setup.
+#
+# This is NOT a drop-in replacement for your whole config.yaml: it's the
+# three blocks cv-lab needs, meant to be merged into whatever you already
+# have (Claude/Anthropic subscription auth, etc). scripts/setup_cv_lab.sh
+# merges these automatically where it safely can, and prints the rest for
+# you to merge by hand otherwise.
+#
+# Schema grounded in: docs/AGENT_YAML_SPEC.md ("Custom ACP agents"),
+# omnigent/onboarding/acp_auth.py, omnigent/cli.py
+# (_build_local_llm_routing_client / _build_external_routing_client),
+# omnigent/spec/types.py (LLMConfig).
+
+# ── 1. Real Gemini CLI (not Antigravity) as a generic ACP agent ────────────
+# Requires `gemini` on PATH, already logged in (gemini's own OAuth — Omnigent
+# stores no credential for ACP agents, see acp_auth.py). The slug Omnigent
+# derives from "Gemini CLI" is "gemini-cli" — examples/cv-lab/agents/search
+# references it as `harness: acp:gemini-cli`. Rename both together if you
+# change the display name here.
+acp:
+  agents:
+    - name: Gemini CLI
+      command: gemini --experimental-acp
+
+# ── 2. Local LLM as a gateway provider, so the `pi` harness can drive it ───
+# `pi` addresses gateway models as `<provider-name>/<model-id>` — the
+# `explore` sub-agent in examples/cv-lab points at `local/REPLACE_...`.
+# base_url must be an OpenAI-compatible endpoint (Ollama's default matches
+# this out of the box). Adjust name/base_url/model to your actual setup.
+providers:
+  local:
+    kind: gateway
+    base_url: http://localhost:11434/v1   # Ollama default; change if different
+    harnesses: [pi]                       # confirmed: only pi/OpenAI-family
+                                           # workers use the gateway path today
+
+# ── 3. Same local model as the smart-routing judge ─────────────────────────
+# This is the server-level `llm:` block (LiteLLM `provider/model` id format),
+# separate from `providers:` above. When set, and no `routing: {provider:
+# external}` block exists, Omnigent's built-in judge (LLMRoutingClient) uses
+# THIS model to answer `sys_advise_models` calls and automatic subagent
+# routing — i.e. your local model decides cheap-vs-expensive for every
+# dispatch, at zero API cost. See omnigent/server/smart_routing.py and
+# omnigent/cli.py::_build_local_llm_routing_client.
+llm:
+  model: openai/REPLACE_WITH_YOUR_LOCAL_MODEL_ID
+  connection:
+    base_url: http://localhost:11434/v1   # same local server as above
+    api_key: ollama                       # Ollama ignores the value; some
+                                           # OpenAI-compatible servers require
+                                           # a non-empty placeholder here too
