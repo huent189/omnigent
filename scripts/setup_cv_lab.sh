@@ -75,8 +75,13 @@ if [ "${MERGED:-0}" = "1" ] && [ -n "$LOCAL_LLM_MODEL" ]; then
     "$CONFIG_FILE"
 fi
 
-# ── 3. Make the pack runnable by name from anywhere. ────────────────────────
-ln -sfn "$REPO_DIR/examples/cv-lab" "$AGENTS_DIR/cv-lab"
+# ── 3. Make the pack runnable by name from anywhere, as a REAL EDITABLE COPY
+# under ~/.omnigent — never a symlink into this repo's own examples/. cv-lab's
+# orchestrator is allowed to revise its own workers' prompts over time (see
+# "Adaptive delegation" in config.yaml); a symlink would make that self-edit
+# land in this git-tracked repo instead of the user's private install. ──────
+rm -rf "$AGENTS_DIR/cv-lab"
+cp -r "$REPO_DIR/examples/cv-lab" "$AGENTS_DIR/cv-lab"
 
 # ── 3b. Turn on the Usage web page by default. ──────────────────────────────
 # usage_page is a real but off-by-default release flag (designs/FEATURE_FLAGS.md,
@@ -99,12 +104,10 @@ else
   echo "-- appended OMNIGENT_FEATURES=usage_page to $SHELL_PROFILE --"
 fi
 
-# ── 4. Fill the same placeholders into the checked-in agent YAMLs, IN A
-# LOCAL COPY under ~/.omnigent — never edit the repo's own examples/ files in
-# place, since those are meant to stay generic/shareable. ──────────────────
+# ── 4. Fill the same placeholder into the LOCAL COPY's explore worker —
+# never the repo's own examples/ files, which are meant to stay
+# generic/shareable. ─────────────────────────────────────────────────────
 if [ -n "$LOCAL_LLM_MODEL" ]; then
-  rm -f "$AGENTS_DIR/cv-lab"  # drop the symlink, replace with a real editable copy
-  cp -r "$REPO_DIR/examples/cv-lab" "$AGENTS_DIR/cv-lab"
   sed -i "s#local/REPLACE_WITH_YOUR_LOCAL_MODEL_ID#local/${LOCAL_LLM_MODEL}#g" \
     "$AGENTS_DIR/cv-lab/agents/explore/config.yaml"
 fi

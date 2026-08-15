@@ -40,7 +40,8 @@ Before running, fill in the two placeholder model ids if you skipped
 
 ```bash
 omnigent run cv-lab
-# or, without the setup script's symlink:
+# or, running this repo's own template directly (see "Adaptive delegation"
+# below for why that's not what setup_cv_lab.sh points you at by default):
 omnigent run examples/cv-lab
 ```
 
@@ -48,6 +49,43 @@ Give it a goal like "figure out why the augmentation pipeline is producing
 corrupt batches after last week's refactor" or "read these three papers and
 tell me if our current augmentation approach is worth revisiting" — cv-lab
 decomposes it, routes each piece per the table above, and reports back.
+
+## The orchestrator never touches code itself
+
+cv-lab's coordinator has one hard rule in its prompt: it does not read
+source, run a search, or write a line of code — not even a one-line fix or a
+single-file look — everything beyond its own two plumbing files below goes
+to a worker. This is deliberate: an orchestrator that "just quickly checks
+one thing" itself is exactly how its context balloons on a long session.
+
+**`.cv-lab/CONVENTIONS.md`** (written in the TARGET repo, not this one) — the
+first time cv-lab runs against a repo with no such file, its first dispatch
+is `explore`/`search` finding the repo's build/test/lint commands, layout,
+coding conventions, and (CV-specific) where datasets/checkpoints/benchmarks
+live; the orchestrator writes the report to this file itself (plumbing, not
+exploring) and every later session reads it instead of re-discovering the
+repo. Delete the file to force a fresh re-discovery if the repo's conventions
+change materially.
+
+## Adaptive delegation — cv-lab revises its own playbook
+
+**`.cv-lab/DELEGATION_NOTES.md`** (also in the target repo) is a lessons log,
+not an activity log: after each worker result the orchestrator appends a line
+only when there's something worth learning (a worker ran out of context, kept
+overstepping scope, or a user preference recurred), and reads the file back
+before planning each new goal to phrase its dispatches better.
+
+When the same lesson for the same worker shows up three or more times, cv-lab
+proposes baking it permanently into that worker's prompt — stated in chat,
+never silent — and, **only in an attended session**, applies it itself to
+`~/.omnigent/agents/cv-lab/agents/<name>/config.yaml`. This is exactly why
+`setup_cv_lab.sh` installs cv-lab as a real copy under `~/.omnigent`, never a
+symlink into this repo: your installed copy is meant to drift from this
+template as it learns your working style. `examples/cv-lab/` here stays the
+generic, shareable starting point — pull from it again (or diff against it)
+if you want to see how far your installed copy has adapted. In an unattended
+overnight run, cv-lab does NOT self-edit — it logs the proposal for you to
+review and apply by hand instead.
 
 ## Usage web page
 

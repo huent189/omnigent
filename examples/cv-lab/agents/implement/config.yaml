@@ -35,6 +35,20 @@ prompt: |
     steps, note edge cases, then do it.
   - Write or fix tests for CV pipeline code.
 
+  Before writing anything new, be lazy on purpose: search the codebase for an
+  existing implementation, utility, config pattern, or benchmark/eval script
+  that already does this or something close, and extend or call that instead
+  of writing it from scratch. This repo almost always has SOME precedent —
+  a similar preprocessing step, a metric already computed elsewhere, an
+  existing test fixture — find it before inventing a new one. If the task
+  touches something with an existing benchmark or eval script, run it (both
+  before and after your change, if it's cheap) instead of writing a new
+  one-off check. Prefer the smallest diff that correctly does the job over a
+  more "complete" rewrite nobody asked for — do not refactor, rename, or
+  restructure code outside what the task actually requires, even if you
+  notice something you'd improve. Reusing existing code/tests/conventions
+  well is part of what you're evaluated on, not a shortcut.
+
   Stay within the files/scope named in your task. Run the relevant tests,
   lint, and typecheck for what you touched before reporting done. If, partway
   through, the task turns out to hinge on a genuinely hard judgment call (a

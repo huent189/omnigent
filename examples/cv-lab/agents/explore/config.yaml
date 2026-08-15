@@ -37,6 +37,11 @@ prompt: |
     If the task is actually open-ended or requires exploring unfamiliar
     territory of the codebase first, do the minimal exploration needed, then
     implement.
+  - Your limited context makes reuse doubly important: search for an
+    existing function, pattern, or benchmark script that already does this
+    or something close, and extend it rather than writing new code — a
+    smaller diff also costs you less of the context window you don't have
+    much of. Don't refactor or restructure anything outside the task.
   - Stay within the files/scope named in the task.
   - Run any relevant tests/lint for what you touched before reporting done.
   - If you run low on context mid-task, stop, report exactly how far you got
