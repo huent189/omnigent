@@ -21,6 +21,32 @@ acp:
   agents:
     - name: Gemini CLI
       command: gemini --experimental-acp
+      # Need to pass gemini-cli an env var Omnigent doesn't already know
+      # about (e.g. a proxy setting, a workspace id)? Two cases:
+      #
+      # (a) The value already exists in the environment the server runs in —
+      #     just name it, no wrapper needed. `command:` is `shlex.split()`
+      #     and exec'd directly (never through a shell), so the spawn env is
+      #     deny-by-default: base + whatever's named here. Names only, never
+      #     values, so nothing secret lands in this file:
+      #       env_passthrough: [YOUR_VAR_NAME]
+      #
+      # (b) You need to COMPUTE/derive the value (read a file, call a vault,
+      #     transform another var) before gemini-cli sees it — write a small
+      #     wrapper script and point `command:` at it directly:
+      #       command: /home/you/bin/gemini-acp-wrapper.sh
+      #     Because there's no shell here, inline forms like
+      #     `command: MYVAR=x gemini --experimental-acp` do NOT work — that's
+      #     shell syntax with nothing to interpret it. The wrapper needs a
+      #     normal shebang (`#!/usr/bin/env bash`), chmod +x (or launch it as
+      #     `command: bash /path/to/wrapper.sh` instead), and must end with
+      #     `exec gemini --experimental-acp "$@"` so it stays the one process
+      #     ACP talks to on stdin/stdout rather than backgrounding it. The
+      #     wrapper itself only sees the SAME deny-by-default env (not your
+      #     full shell env) — any host variable it reads from must ALSO be
+      #     named in `env_passthrough` here, or in the consuming agent
+      #     spec's `os_env.sandbox.env_passthrough` (see
+      #     examples/cv-lab/agents/search/config.yaml).
 
 # ── 2. Local LLM as a gateway provider, so the `pi` harness can drive it ───
 # `pi` addresses gateway models as `<provider-name>/<model-id>` — the
