@@ -87,6 +87,47 @@ if you want to see how far your installed copy has adapted. In an unattended
 overnight run, cv-lab does NOT self-edit — it logs the proposal for you to
 review and apply by hand instead.
 
+## Parallelism — independent work fans out in one turn
+
+The orchestrator dispatches independent sub-tasks as multiple `sys_session_send`
+calls in the SAME turn rather than one at a time — reading unrelated papers,
+exploring unrelated modules, or applying the same fix across independent
+files all fan out together. `spawn_bounds` caps it at 6 dispatches per turn;
+a wider fan-out spans multiple turns as inbox results free up room, not a
+slower serial pace. Genuinely dependent work (e.g. `reason` needing what
+`search` hasn't fetched yet) is still sequenced — parallelism only applies
+where nothing legitimately blocks on anything else.
+
+Faster fan-out into `implement`/`reason` also means the cost caps below get
+hit sooner in wall-clock terms — expected, and exactly what they're for.
+
+## Cost guardrails — two layers, on every Claude-capable session
+
+Every session that can run on a Claude model (the orchestrator itself, since
+`smart_routing_harness: auto` can route its own brain there, plus
+`implement` and `reason`) carries the same two policies from
+`omnigent.policies.builtins.cost`:
+
+- **`cost_budget`** — a per-session hard cap (`max_cost_usd`) plus a soft
+  warning (`ask_thresholds_usd`) that ASKs once and remembers the answer.
+  `expensive_models: ["claude"]` means once THIS session crosses its cap,
+  further Claude calls in it are blocked — `explore`/`search` dispatches
+  (free) are unaffected, so the orchestrator can keep making progress on the
+  free tier even after Claude is capped for that session. Defaults: 5.00
+  orchestrator / 3.00 `implement` / 8.00 `reason` (higher for `reason` since
+  it's dispatched rarely but costs more per call).
+- **`user_daily_cost_budget`** — the actual guard against draining your
+  balance: cumulative spend across **all** your sessions for the day, not
+  just one. Has to be declared on every Claude-capable agent's own
+  `config.yaml` (each session only enforces its own guardrails), so all
+  three copies share the same 25.00 / [10.00, 20.00] figures — keep them in
+  sync if you change one.
+
+None of these numbers are a recommendation — they're a starting point in
+each agent's `config.yaml` (search `cost_budget` / `user_daily_cost_budget`).
+Set them to what you're actually comfortable losing to one runaway session or
+one bad day. Full parameter reference: `docs/POLICIES.md` § Cost.
+
 ## Usage web page
 
 `setup_cv_lab.sh` appends `OMNIGENT_FEATURES=usage_page` to your shell profile

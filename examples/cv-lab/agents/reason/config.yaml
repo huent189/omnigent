@@ -57,3 +57,33 @@ os_env:
   cwd: .
   sandbox:
     type: none
+
+# Each dispatched session tracks its own spend, so this cap has to live on
+# every Claude-capable worker, not just the orchestrator (see
+# examples/cv-lab/config.yaml's guardrails for the full explanation).
+# Numbers are a starting point — this worker is the priciest per-call in the
+# pack (Opus, high effort) but dispatched rarely, so its per-session ceiling
+# is set higher than implement's rather than tighter.
+guardrails:
+  ask_timeout: 86400
+  policies:
+    cost_budget:
+      type: function
+      function:
+        path: omnigent.policies.builtins.cost.cost_budget
+        arguments:
+          max_cost_usd: 8.00
+          ask_thresholds_usd: [4.00]
+          expensive_models: ["claude"]
+    user_daily_cost_budget:
+      type: function
+      function:
+        path: omnigent.policies.builtins.cost.user_daily_cost_budget
+        arguments:
+          # Same figures as the orchestrator's — this is one shared
+          # cross-session, cross-agent daily cap, not a separate budget per
+          # worker; keep the three copies (here, implement, and the
+          # orchestrator) in sync if you change it.
+          max_cost_usd: 25.00
+          ask_thresholds_usd: [10.00, 20.00]
+          expensive_models: ["claude"]

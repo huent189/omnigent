@@ -85,6 +85,31 @@ prompt: |
   codebase currently does, `reason` to decide the direction, `implement` to
   build it. Plan the sequence before dispatching the first piece.
 
+  ## Parallelism — fan out independent work, don't serialize it
+
+  Speed matters: when a goal breaks into pieces that don't depend on each
+  other's output, dispatch them ALL as separate `sys_session_send` calls in
+  the SAME turn rather than one-at-a-time waiting for each to finish. Reading
+  three papers, exploring four unrelated modules, or running the same fix
+  across independent files are all parallelizable — nothing about them
+  requires the others to complete first. `spawn_bounds` caps you at 6
+  dispatches per turn; a wider fan-out spans multiple turns as inbox results
+  free up room, not a slower one-by-one pace.
+
+  Sequence, don't parallelize, when a piece genuinely needs another's output
+  — `reason` deciding a direction from papers `search` hasn't fetched yet, or
+  `implement` building something `explore` hasn't finished investigating, is
+  a real dependency, not caution. When in doubt: if you could write both
+  tasks' full instructions right now without knowing the other's result,
+  they're independent — dispatch both.
+
+  Parallel fan-out reaches the Claude cost caps below faster (more `implement`
+  / `reason` dispatches in less wall-clock time) — that's expected, not a
+  reason to hold back on `explore` / `search` parallelism, which is free. For
+  a burst of Claude-tier work specifically, a wider `explore`/`search` fan-out
+  that narrows down to ONE well-scoped `implement`/`reason` dispatch is both
+  faster AND cheaper than parallelizing the expensive workers themselves.
+
   Before any fan-out, call `sys_advise_models` if it appears in your tool
   list (it's only offered when intelligent routing is configured on the
   server — see the smart-routing section of the setup doc). Pass your
@@ -211,3 +236,36 @@ guardrails:
         path: omnigent.inner.nessie.policies.headless_subagent_purpose_guard
         arguments:
           allowed_purposes: [implement, review, explore, search]
+    # Guards the ORCHESTRATOR's own turns — its brain also draws on your
+    # Claude balance (smart_routing_harness: auto can route it there). The
+    # `implement`/`reason` workers carry the same two policies on their own
+    # sessions (agents/implement/config.yaml, agents/reason/config.yaml) —
+    # each session tracks its own spend, so the cap has to be declared on
+    # every Claude-capable session, not just here. See docs/POLICIES.md
+    # ("Cost") for the full parameter reference. Numbers below are a
+    # starting point, not a recommendation — set them to what you're
+    # actually comfortable losing to one runaway session / one day.
+    cost_budget:
+      type: function
+      function:
+        path: omnigent.policies.builtins.cost.cost_budget
+        arguments:
+          max_cost_usd: 5.00
+          ask_thresholds_usd: [2.00]
+          # Case-insensitive substring match on the model id — "claude"
+          # catches both claude-opus-* and claude-sonnet-*, so once this
+          # session's spend hits the cap, its OWN Claude turns are blocked
+          # while explore/search dispatches (free) keep working.
+          expensive_models: ["claude"]
+    user_daily_cost_budget:
+      type: function
+      function:
+        path: omnigent.policies.builtins.cost.user_daily_cost_budget
+        arguments:
+          # Cumulative across ALL of your sessions today, not just this one
+          # — the actual guard against a bad afternoon draining the $400
+          # balance. Approval at a soft threshold is remembered per user+day,
+          # so it won't re-ask you again today once you've cleared one.
+          max_cost_usd: 25.00
+          ask_thresholds_usd: [10.00, 20.00]
+          expensive_models: ["claude"]
