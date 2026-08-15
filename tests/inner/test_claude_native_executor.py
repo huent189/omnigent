@@ -894,6 +894,153 @@ async def test_run_turn_applies_routed_model_before_message_under_one_lock(
 
 
 @pytest.mark.asyncio
+async def test_run_turn_applies_configured_effort_before_message_under_one_lock(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """
+    A pinned ``reasoning_effort`` is switched via ``/effort`` before the message.
+
+    Mirrors ``test_run_turn_applies_routed_model_before_message_under_one_lock``:
+    an agent spec's ``executor.config.reasoning_effort`` reaches the executor as
+    ``config.extra["reasoning_effort"]`` (same key
+    ``omnigent/inner/codex_native_executor.py`` reads for its own native
+    thread), and must be typed as ``/effort <level>`` before the message, under
+    the same ``_inject_lock`` — never as a separate racing writer.
+    """
+    monkeypatch.delenv(REQUEST_SESSION_ID_ENV_VAR, raising=False)
+    bridge_dir = tmp_path / "bridge"
+    calls: list[tuple[str, ...]] = []
+
+    def fake_inject_slash_command(
+        bridge_dir_arg: Path,
+        *,
+        command: str,
+        timeout_s: float = 30.0,
+        auto_confirm: bool = False,
+        confirm_hint: str | None = None,
+    ) -> None:
+        del bridge_dir_arg, timeout_s
+        calls.append(("slash", command, auto_confirm))
+
+    def fake_inject_user_message(
+        bridge_dir_arg: Path,
+        *,
+        content: str,
+        timeout_s: float = 30.0,
+    ) -> None:
+        del bridge_dir_arg, timeout_s
+        calls.append(("message", content))
+
+    monkeypatch.setattr(claude_native_executor, "inject_slash_command", fake_inject_slash_command)
+    monkeypatch.setattr(claude_native_executor, "inject_user_message", fake_inject_user_message)
+
+    executor = ClaudeNativeExecutor(bridge_dir)
+    events = [
+        event
+        async for event in executor.run_turn(
+            messages=[{"role": "user", "content": "find the root cause"}],
+            tools=[],
+            system_prompt="",
+            config=ExecutorConfig(extra={"reasoning_effort": "high"}),
+        )
+    ]
+
+    assert calls == [
+        ("slash", "/effort high", True),
+        ("message", "find the root cause"),
+    ], f"Expected /effort (auto_confirm) then message, in order; got {calls}."
+    assert events == [TurnComplete(response=None)]
+
+
+@pytest.mark.asyncio
+async def test_run_turn_skips_effort_switch_when_already_applied(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A second turn with the same configured effort types no ``/effort``."""
+    monkeypatch.delenv(REQUEST_SESSION_ID_ENV_VAR, raising=False)
+    bridge_dir = tmp_path / "bridge"
+    slash_calls: list[str] = []
+    msg_calls: list[str] = []
+
+    monkeypatch.setattr(
+        claude_native_executor,
+        "inject_slash_command",
+        lambda bridge_dir_arg, *, command, timeout_s=30.0, auto_confirm=False, confirm_hint=None: (
+            slash_calls.append(command)
+        ),
+    )
+    monkeypatch.setattr(
+        claude_native_executor,
+        "inject_user_message",
+        lambda bridge_dir_arg, *, content, timeout_s=30.0: msg_calls.append(content),
+    )
+
+    executor = ClaudeNativeExecutor(bridge_dir)
+    config = ExecutorConfig(extra={"reasoning_effort": "high"})
+    for message in ("first", "second"):
+        async for _ in executor.run_turn(
+            messages=[{"role": "user", "content": message}],
+            tools=[],
+            system_prompt="",
+            config=config,
+        ):
+            pass
+
+    assert slash_calls == ["/effort high"], (
+        f"Expected exactly one /effort switch across both turns; got {slash_calls}."
+    )
+    assert msg_calls == ["first", "second"]
+
+
+@pytest.mark.asyncio
+async def test_run_turn_unsupported_effort_is_dropped_not_fatal(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """
+    An unsupported effort value must not sink the turn.
+
+    Mirrors ``codex_native_executor``'s fail-open handling of a bad
+    ``config.extra["reasoning_effort"]``: log and drop it, keep the pane on
+    its current effort, still deliver the message.
+    """
+    monkeypatch.delenv(REQUEST_SESSION_ID_ENV_VAR, raising=False)
+    bridge_dir = tmp_path / "bridge"
+    slash_calls: list[str] = []
+    msg_calls: list[str] = []
+
+    monkeypatch.setattr(
+        claude_native_executor,
+        "inject_slash_command",
+        lambda bridge_dir_arg, *, command, timeout_s=30.0, auto_confirm=False, confirm_hint=None: (
+            slash_calls.append(command)
+        ),
+    )
+    monkeypatch.setattr(
+        claude_native_executor,
+        "inject_user_message",
+        lambda bridge_dir_arg, *, content, timeout_s=30.0: msg_calls.append(content),
+    )
+
+    executor = ClaudeNativeExecutor(bridge_dir)
+    events = [
+        event
+        async for event in executor.run_turn(
+            messages=[{"role": "user", "content": "hello"}],
+            tools=[],
+            system_prompt="",
+            config=ExecutorConfig(extra={"reasoning_effort": "not-a-real-level"}),
+        )
+    ]
+
+    assert slash_calls == []
+    assert msg_calls == ["hello"]
+    assert events == [TurnComplete(response=None)]
+
+
+@pytest.mark.asyncio
 async def test_run_turn_uses_the_custom_model_slot_id_verbatim(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

@@ -78,6 +78,27 @@ fi
 # ── 3. Make the pack runnable by name from anywhere. ────────────────────────
 ln -sfn "$REPO_DIR/examples/cv-lab" "$AGENTS_DIR/cv-lab"
 
+# ── 3b. Turn on the Usage web page by default. ──────────────────────────────
+# usage_page is a real but off-by-default release flag (designs/FEATURE_FLAGS.md,
+# omnigent/server/feature_flags.py) — resolved once from OMNIGENT_FEATURES at
+# server boot, so it has to be set in the environment before `omnigent server`
+# starts, not toggled in code. Appended idempotently to your shell profile
+# rather than exported here, since `export` in this script's own subshell
+# would not survive past this script exiting.
+SHELL_PROFILE="${OMNIGENT_SHELL_PROFILE:-$HOME/.bashrc}"
+FEATURES_LINE='export OMNIGENT_FEATURES="usage_page${OMNIGENT_FEATURES:+,$OMNIGENT_FEATURES}"'
+if [ -f "$SHELL_PROFILE" ] && grep -qF 'OMNIGENT_FEATURES' "$SHELL_PROFILE"; then
+  echo "-- $SHELL_PROFILE already sets OMNIGENT_FEATURES; leaving it alone --"
+  echo "   Add 'usage_page' to its existing value by hand if the Usage page still isn't showing."
+else
+  {
+    echo ''
+    echo '# Added by omnigent scripts/setup_cv_lab.sh — shows the Usage web page by default.'
+    echo "$FEATURES_LINE"
+  } >>"$SHELL_PROFILE"
+  echo "-- appended OMNIGENT_FEATURES=usage_page to $SHELL_PROFILE --"
+fi
+
 # ── 4. Fill the same placeholders into the checked-in agent YAMLs, IN A
 # LOCAL COPY under ~/.omnigent — never edit the repo's own examples/ files in
 # place, since those are meant to stay generic/shareable. ──────────────────
@@ -92,6 +113,8 @@ echo
 echo "== done =="
 echo "Run it with:  omnigent run cv-lab"
 echo "(or directly: omnigent run \"$AGENTS_DIR/cv-lab\")"
+echo "Usage web page: open a NEW shell (or 'source $SHELL_PROFILE') before"
+echo "'omnigent server' so it picks up OMNIGENT_FEATURES=usage_page."
 if [ -z "$LOCAL_LLM_MODEL" ]; then
   echo
   echo "Still TODO by hand (LOCAL_LLM_MODEL wasn't set):"

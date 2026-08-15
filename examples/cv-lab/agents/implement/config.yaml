@@ -8,10 +8,19 @@ description: >-
 executor:
   type: omnigent
   config:
-    harness: claude-sdk
-    # Run `omnigent models list --harness claude-sdk` to confirm the exact
-    # current Sonnet id.
-    model: claude-sonnet-4-... # REPLACE: exact id from `omnigent models list`
+    harness: claude-native
+    # Headless workers can't answer ApprovalCards, and managed Claude
+    # settings disable `bypassPermissions`. `auto` auto-approves without
+    # prompting (-> `--permission-mode auto`). Same setting polly's own
+    # claude_code sub-agent uses (examples/polly/agents/claude_code/config.yaml).
+    permission_mode: auto
+    # No CLI command lists these — ask an agent with `tools.agents` declared
+    # (cv-lab's own orchestrator qualifies) to call `sys_list_models`, or
+    # check the model picker in the web UI, to confirm the exact current
+    # Sonnet id.
+    model: claude-sonnet-4-... # REPLACE: exact id from `sys_list_models`
+    # Applied via `/effort medium` before each turn — see
+    # omnigent/inner/claude_native_executor.py.
     reasoning_effort: medium
 
 prompt: |

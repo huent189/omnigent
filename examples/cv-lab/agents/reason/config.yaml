@@ -8,15 +8,21 @@ description: >-
 executor:
   type: omnigent
   config:
-    harness: claude-sdk
-    # Run `omnigent models list --harness claude-sdk` (or check
-    # `sys_list_models` from inside a session) to confirm the exact current
+    harness: claude-native
+    # Headless workers can't answer ApprovalCards, and managed Claude
+    # settings disable `bypassPermissions`. `auto` auto-approves without
+    # prompting (-> `--permission-mode auto`). Same setting polly's own
+    # claude_code sub-agent uses (examples/polly/agents/claude_code/config.yaml).
+    permission_mode: auto
+    # No CLI command lists these — ask an agent with `tools.agents` declared
+    # (cv-lab's own orchestrator qualifies) to call `sys_list_models`, or
+    # check the model picker in the web UI, to confirm the exact current
     # Opus id your subscription/provider resolves — pin it here rather than
     # leaving it unpinned, since this agent's whole reason for existing is
     # "always the strongest model, deliberately".
-    model: claude-opus-4-... # REPLACE: exact id from `omnigent models list`
-    # Confirmed in omnigent/inner/claude_sdk_executor.py (cfg.extra
-    # "reasoning_effort" -> SDK `effort` kwarg); valid values for Claude:
+    model: claude-opus-4-... # REPLACE: exact id from `sys_list_models`
+    # Applied via `/effort high` before each turn — confirmed in
+    # omnigent/inner/claude_native_executor.py; valid values for Claude:
     # low | medium | high | xhigh | max.
     reasoning_effort: high
 

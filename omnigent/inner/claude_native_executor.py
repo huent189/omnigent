@@ -11,6 +11,7 @@ from pathlib import Path
 from omnigent.claude_model_vocabulary import claude_model_command_arg, normalized_model_id
 from omnigent.claude_native_bridge import (
     BRIDGE_DIR_ENV_VAR,
+    EFFORT_DIALOG_HINT,
     REQUEST_SESSION_ID_ENV_VAR,
     SWITCH_MODEL_DIALOG_HINT,
     inject_slash_command,
@@ -32,6 +33,7 @@ from omnigent.inner.executor import (
     describe_exception,
 )
 from omnigent.inner.native_attachments import attachment_reference_line
+from omnigent.reasoning_effort import CLAUDE_EFFORTS, validate_effort
 
 _logger = logging.getLogger(__name__)
 
@@ -71,6 +73,14 @@ class ClaudeNativeExecutor(Executor):
         # ``/model`` when the model actually changes. Seeded lazily from the
         # spawn ``launch_model`` on the first turn (``None`` = not yet known).
         self._applied_model: str | None = None
+        # The effort level the pane is currently on, so a turn only types
+        # ``/effort`` when the configured level actually changes. Unlike
+        # ``_applied_model`` this has no launch-time seed to read (the native
+        # terminal launches with no ``--effort``, see
+        # ``claude_native.read_user_effort_level`` — it deliberately inherits
+        # whatever the person's own ``~/.claude/settings.json`` last saved),
+        # so ``None`` here means "unknown, switch if the agent spec pins one".
+        self._applied_effort: str | None = None
 
     def supports_streaming(self) -> bool:
         """:returns: ``False`` because output is emitted by the transcript forwarder."""
@@ -126,11 +136,13 @@ class ClaudeNativeExecutor(Executor):
         :param system_prompt: System prompt from the agent spec. The
             native Claude Code terminal controls its own prompt/settings,
             so this is ignored.
-        :param config: Per-turn executor config. Only ``config.model``
-            is used: when intelligent routing picks a model for this turn,
-            it arrives here (adapter maps ``request.model_override`` →
-            ``config.model``) and the switch is applied inline, before the
-            message — see the ``/model`` handling below.
+        :param config: Per-turn executor config. ``config.model`` and
+            ``config.extra["reasoning_effort"]`` are used: when intelligent
+            routing (or a pinned agent-spec value) names a model/effort for
+            this turn, they arrive here and the switch is applied inline,
+            before the message — see the ``/model`` and ``/effort`` handling
+            below. Mirrors how ``omnigent/inner/codex_native_executor.py``
+            applies the same two ``config`` fields to its own native thread.
         :yields: :class:`TurnComplete` after the input was injected,
             or :class:`ExecutorError` on bridge failure.
         """
@@ -168,6 +180,17 @@ class ClaudeNativeExecutor(Executor):
         # ``/model`` only accepts this session's aliases / custom slot; a
         # bare catalog id is ignored and the pane keeps its old model.
         wanted_model_arg = self._model_command_arg(wanted_model)
+        raw_effort = config.extra.get("reasoning_effort") if config is not None else None
+        try:
+            wanted_effort = validate_effort(raw_effort, "Claude Code (native)", CLAUDE_EFFORTS)
+        except ValueError:
+            # An unsupported effort must not sink the turn — drop it and
+            # leave the pane on whatever effort it is already running,
+            # mirroring the codex-native executor's same fail-open choice
+            # for a bad ``config.extra["reasoning_effort"]``.
+            _logger.warning("claude-native: ignoring unsupported reasoning effort: %r", raw_effort)
+            wanted_effort = None
+        wanted_effort_arg = self._effort_command_arg(wanted_effort)
         try:
             with telemetry.span("claude_native.inject"):
                 async with self._inject_lock:
@@ -187,6 +210,20 @@ class ClaudeNativeExecutor(Executor):
                         # Track the routed id, not the alias: the next turn's
                         # comparison is against what routing asked for.
                         self._applied_model = wanted_model
+                    if wanted_effort_arg is not None:
+                        # Same trade-off as ``/model`` above: this also saves
+                        # the pick as the person's global
+                        # ``~/.claude/settings.json`` ``effortLevel`` for new
+                        # sessions. Runs before the message inject, same lock,
+                        # for the same anti-race reason.
+                        await asyncio.to_thread(
+                            inject_slash_command,
+                            self._bridge_dir,
+                            command=f"/effort {wanted_effort_arg}",
+                            auto_confirm=True,
+                            confirm_hint=EFFORT_DIALOG_HINT,
+                        )
+                        self._applied_effort = wanted_effort
                     await asyncio.to_thread(
                         inject_user_message,
                         self._bridge_dir,
@@ -253,6 +290,33 @@ class ClaudeNativeExecutor(Executor):
             wanted_model,
         )
         return wanted_arg
+
+    def _effort_command_arg(self, wanted_effort: str | None) -> str | None:
+        """
+        Return the ``/effort`` argument for this turn, or ``None`` to skip.
+
+        Unlike :meth:`_model_command_arg` there is no untranslatable-value
+        gate — every value in :data:`CLAUDE_EFFORTS` is a valid ``/effort``
+        argument the native CLI accepts verbatim, so the only question is
+        whether a switch is needed at all.
+
+        :param wanted_effort: The turn's configured effort (from the agent
+            spec's ``executor.config.reasoning_effort``, threaded through
+            ``config.extra["reasoning_effort"]``), or ``None`` when the spec
+            pins none.
+        :returns: An ``/effort`` argument, or ``None`` when no switch should
+            be typed.
+        """
+        if wanted_effort is None:
+            return None
+        if wanted_effort == self._applied_effort:
+            _logger.info(
+                "claude-native: skipping /effort — pane is already on %s",
+                wanted_effort,
+            )
+            return None
+        _logger.info("claude-native: typing /effort %s", wanted_effort)
+        return wanted_effort
 
     def _should_switch_model(self, wanted_model: str | None) -> bool:
         """
