@@ -5280,10 +5280,11 @@ def _claude_native_model_from_spec(agent_spec: AgentSpec | ResolvedSpec | None) 
     Read the Claude Code model id to launch the native TUI with, from a spec.
 
     Reads the canonical ``spec.executor.model`` field (the same field the
-    in-process claude-sdk harness consumes via ``_resolve_spec_model``). Unlike
-    cursor-native, gateway-routed ``databricks-*`` ids are valid Claude Code
-    models when the launch is wired through the Databricks AI gateway, so they
-    are passed through.
+    in-process claude-sdk harness consumes via ``_resolve_spec_model``), falling
+    back to ``executor.config["model"]`` for bundle specs that pin the model
+    inside the harness config block. Unlike cursor-native, gateway-routed
+    ``databricks-*`` ids are valid Claude Code models when the launch is wired
+    through the Databricks AI gateway, so they are passed through.
 
     :param agent_spec: Agent spec object, or a resolved wrapper carrying a
         ``spec`` attribute. ``None`` means no spec was available.
@@ -5294,9 +5295,10 @@ def _claude_native_model_from_spec(agent_spec: AgentSpec | ResolvedSpec | None) 
     if spec is None:
         return None
     model = spec.executor.model
-    if not isinstance(model, str) or not model:
-        return None
-    return model
+    if isinstance(model, str) and model:
+        return model
+    config_model = spec.executor.config.get("model")
+    return config_model if isinstance(config_model, str) and config_model else None
 
 
 def _cursor_native_model_from_spec(agent_spec: AgentSpec | ResolvedSpec | None) -> str | None:

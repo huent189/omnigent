@@ -12,10 +12,14 @@ description: >-
 executor:
   type: omnigent
   config:
-    harness: claude-sdk
-    # Route the brain too (not pinned) so it can ride whatever your Claude
-    # provider resolves as default, same reasoning as polly's own note: a
-    # pinned brain model strands the model family its own routing runs in.
+    harness: claude-native
+    # Headless workers can't answer ApprovalCards, and managed Claude
+    # settings disable `bypassPermissions`. `auto` auto-approves without
+    # prompting (-> `--permission-mode auto`).
+    permission_mode: auto
+    # Pinned to Sonnet rather than left to ride the provider default —
+    # confirm this is still the exact current id via `sys_list_models`.
+    model: claude-sonnet-5
     smart_routing_harness: auto
 
 prompt: |
