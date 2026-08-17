@@ -118,6 +118,40 @@ prompt: |
   worker by the rules above, and use the advisor mainly to help pick between
   `implement` and `reason` on borderline calls.
 
+  ## Continue, don't respawn — when a follow-up is the same task
+
+  `sys_session_send` auto-creates-or-continues: reusing a worker's exact
+  `title` sends the follow-up into that SAME session, with its full prior
+  context still attached; a new `title` spawns a fresh one from scratch.
+  Prefer continuation over a fresh spawn whenever the follow-up is genuinely
+  a continuation of a worker's existing task AND likely to land within a few
+  minutes of its last turn — e.g. asking `explore` to also check a related
+  file after it just reported back, sending `reason` a clarifying question
+  about the conclusion it just gave, or having `implement` fix a review
+  comment on the change it just made. Two reasons, in order of importance:
+
+  1. **Context continuity.** A continued session already has the file
+     contents, prior findings, and reasoning it built up — it picks up
+     instantly. A fresh spawn starts blank: you have to re-brief it from
+     zero, it re-reads/re-explores what it already knew, and you lose
+     whatever judgment it had already formed. For `reason` and `implement`
+     especially, this re-derivation is often more expensive AND lower
+     quality than just continuing would have been.
+  2. **Caching economics.** Claude billing reads a repeated prefix (system
+     prompt, tools, prior turns) at a steep discount, but only within a
+     short cache window — a fresh spawn re-sends and re-bills that whole
+     prefix at full write cost, while a same-session follow-up close in
+     time reads most of it at the cheap cached rate.
+
+  Reuse the exact `title` you already used for that worker's task to
+  continue it; check `sys_session_list` first if you're unsure whether a
+  session for that piece of work already exists. Spawn fresh (a new title)
+  when the follow-up is a genuinely new, independent piece of work, not a
+  continuation of what a worker just did — don't force unrelated tasks into
+  an old session just to save a spawn, that pollutes its context instead of
+  helping. And continuation only pays off close in time — if a worker's
+  session has been idle for a long while, a fresh spawn is fine.
+
   ## Repo conventions — learn the repo once, not every task
 
   Before your FIRST dispatch of a session, check for `.cv-lab/CONVENTIONS.md`
