@@ -2522,7 +2522,25 @@ def create_runner_app(
         workspace = await _session_workspace_value(session_id)
         if workspace and workspace.strip():
             return Path(workspace.strip()).expanduser().resolve()
-        return runner_workspace.resolve() if runner_workspace is not None else None
+        if runner_workspace is not None:
+            return runner_workspace.resolve()
+        # Neither the session's own workspace nor OMNIGENT_RUNNER_WORKSPACE is
+        # set (e.g. a headless sub-agent session dispatched under a runner
+        # that was never given a workspace). Returning None here used to
+        # propagate all the way to harness spawn-env builders that pass a
+        # missing cwd through as "unset" (e.g. _build_acp_spawn_env leaves
+        # HARNESS_ACP_CWD unset) — the harness then fell back to the raw OS
+        # process cwd (AcpExecutor.__init__'s ``cwd or os.getcwd()``), which
+        # is wherever the runner process happened to be launched from, not
+        # anything scoped to this session. Fall back to the same
+        # per-conversation tmpdir the runner-local sys_os_* dispatch path
+        # already uses (_effective_runner_os_env_spec /
+        # _runner_default_os_env_cwd) so every harness spawn gets a concrete,
+        # session-scoped cwd instead of silently inheriting the server's
+        # launch directory.
+        from omnigent.runner.tool_dispatch import _runner_default_os_env_cwd
+
+        return Path(_runner_default_os_env_cwd(session_id))
 
     async def _load_legacy_session_init_context() -> _SessionInitContext:
         await _get_server_version(server_client)
