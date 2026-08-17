@@ -117,6 +117,7 @@ import {
   useChatStore,
 } from "@/store/chatStore";
 import {
+  isCanonicalNativeCodingAgent,
   isNativeTerminalSession,
   nativeCodingAgentForHarness,
   nativeCodingAgentForSubagentWrapper,
@@ -4215,11 +4216,20 @@ export function composerHarnessLabel(
 ): string | null {
   const nativeSubagent = nativeCodingAgentForSubagentWrapper(wrapper);
   if (nativeSubagent) return nativeSubagent.displayName;
-  if (modelPickerKind === "claude") return "Claude";
-  if (modelPickerKind === "codex") return "Codex";
-  if (modelPickerKind === "cursor") return "Cursor";
-  if (modelPickerKind === "kiro") return "Kiro";
-  if (modelPickerKind === "opencode") return "OpenCode";
+  // Vendor-product labels ("Claude", "Codex", ...) are an identity/branding
+  // decision — only the vendor's own canonical row earns them. A custom
+  // agent that merely EXECUTES via that harness (e.g. an orchestrator
+  // pinned to claude-native for accurate native billing) keeps its own
+  // name instead, matching displayNameForAgent in useAvailableAgents.ts.
+  const isCanonical =
+    !agentName || isCanonicalNativeCodingAgent({ name: agentName, harness: sessionHarness });
+  if (isCanonical) {
+    if (modelPickerKind === "claude") return "Claude";
+    if (modelPickerKind === "codex") return "Codex";
+    if (modelPickerKind === "cursor") return "Cursor";
+    if (modelPickerKind === "kiro") return "Kiro";
+    if (modelPickerKind === "opencode") return "OpenCode";
+  }
   const display = agentName ? agentDisplayLabel(agentName) : null;
   const harness = sessionHarness ? (harnessLabels[sessionHarness] ?? null) : null;
   if (display && harness) return `${display} (${harness})`;
