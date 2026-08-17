@@ -7,10 +7,10 @@ instead of by habit.
 
 | Worker | Runs on | Use it for | Don't use it for |
 |---|---|---|---|
-| `explore` | local model via `pi` | well-defined coding tasks, codebase exploration | anything that won't fit its context window in one shot — chunk it first |
-| `search` | Gemini CLI (real `gemini-cli`, via ACP) | web search, code edits you've specified in full detail | codebase exploration (slow at it) |
-| `implement` | Claude Sonnet, medium effort, via `claude-native` | everyday planning + implementation | genuinely hard judgment calls |
-| `reason` | Claude Opus, high effort, via `claude-native` | conclusions from data, synthesis across papers, new research directions | routine coding — `implement` handles that for less |
+| `explore` (Pi-agent) | local model via `pi` | well-defined coding + codebase exploration that fits ~100K tokens of context — the better coder of the two free workers | anything too big/spread-out for its ~100K window — chunk it, or hand it to `search` instead |
+| `search` (Gemini) | Gemini CLI (real `gemini-cli`, via ACP) | web search, and well-defined code edits too large for `explore`'s context window — weaker coding than `explore`, but a much bigger window | codebase exploration (slow at it); well-defined edits that fit in `explore`'s window (`explore` codes better and is just as free) |
+| `implement` (Sonnet) | Claude Sonnet, medium effort, via `claude-native` | well-defined tasks needing more reliability than the free workers give — best coding quality short of `reason`, but paid | genuinely ambiguous judgment calls — that's `reason`; routine work either free worker can already do |
+| `reason` (Opus) | Claude Opus, high effort, via `claude-native` | tasks where it's genuinely ambiguous what needs to be done — conclusions from data, synthesis across papers, new research directions, hard tradeoffs | routine or well-defined coding, however large — `explore`/`search`/`implement` handle that for far less |
 
 ## One-time setup
 
