@@ -6,6 +6,7 @@ import {
   nativeCodingAgentForAvailableAgent,
   nativeCodingAgentForAgentName,
   nativeCodingAgentForHarness,
+  isCanonicalNativeCodingAgent,
 } from "@/lib/nativeCodingAgents";
 
 export interface AvailableAgent {
@@ -53,8 +54,16 @@ const DISPLAY_NAMES: Record<string, string> = {
 };
 
 function displayNameForAgent(name: string, harness?: string | null): string {
+  // The harness-derived vendor label ("Claude Code", "Codex", ...) only
+  // applies to the vendor's own canonical row (the seeded built-in or a
+  // fork/switch clone of it) — a distinct, independently-named agent that
+  // merely executes via that harness (e.g. a custom orchestrator pinned to
+  // `claude-native` for accurate native billing) keeps its own name instead
+  // of being mislabeled as the vendor's product. See
+  // `isCanonicalNativeCodingAgent` for the full rationale.
+  const isCanonical = isCanonicalNativeCodingAgent({ name, harness: harness ?? null });
   return (
-    nativeCodingAgentForHarness(harness)?.displayName ??
+    (isCanonical ? nativeCodingAgentForHarness(harness)?.displayName : undefined) ??
     nativeCodingAgentForAgentName(name)?.displayName ??
     DISPLAY_NAMES[name] ??
     capitalizeAgentName(name)
@@ -65,7 +74,13 @@ function dedupeNativeAgents(agents: AvailableAgent[]): AvailableAgent[] {
   const result: AvailableAgent[] = [];
   const nativeIndex = new Map<string, number>();
   for (const agent of agents) {
-    const nativeAgent = nativeCodingAgentForAvailableAgent(agent);
+    // Only the vendor's own canonical row participates in native dedup — a
+    // distinct custom agent that happens to share a native harness (see
+    // `isCanonicalNativeCodingAgent`) is never a duplicate of it and must
+    // not be collapsed away.
+    const nativeAgent = isCanonicalNativeCodingAgent(agent)
+      ? nativeCodingAgentForAvailableAgent(agent)
+      : undefined;
     if (nativeAgent === undefined) {
       result.push(agent);
       continue;

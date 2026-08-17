@@ -39,7 +39,7 @@ import { sortAgentsForDisplay } from "@/lib/agentGrouping";
 import { sandboxOptionLabel } from "@/lib/capabilities";
 import { useServerInfo } from "@/lib/CapabilitiesContext";
 import { SANDBOX_HOST_CHOICE } from "@/lib/hostPreferences";
-import { isNativeCodingAgent } from "@/lib/nativeCodingAgents";
+import { isCanonicalNativeCodingAgent } from "@/lib/nativeCodingAgents";
 import type { ProjectConfig } from "@/lib/projectsApi";
 import { shouldGuardDialogDismiss } from "@/lib/dialogDismissGuard";
 import { AgentHarnessPicker } from "./NewChatDialog";
@@ -221,8 +221,11 @@ export function ProjectSettingsDialog({
   // Agent picker groups, mirroring the composer's split (native harness CLIs vs
   // SDK / bundle agents). The picker takes both lists and a selection.
   const agentList = useMemo(() => sortAgentsForDisplay(agents ?? []), [agents]);
-  const harnessEntries = useMemo(() => agentList.filter(isNativeCodingAgent), [agentList]);
-  const agentEntries = useMemo(() => agentList.filter((a) => !isNativeCodingAgent(a)), [agentList]);
+  const harnessEntries = useMemo(() => agentList.filter(isCanonicalNativeCodingAgent), [agentList]);
+  const agentEntries = useMemo(
+    () => agentList.filter((a) => !isCanonicalNativeCodingAgent(a)),
+    [agentList],
+  );
   const selectedAgent = agentList.find((a) => a.id === agentId) ?? null;
   const agentLabel = selectedAgent ? selectedAgent.display_name : "No default";
   // The host the agent picker's readiness badges check against (its config

@@ -1,4 +1,5 @@
 import type { AvailableAgent } from "@/hooks/useAvailableAgents";
+import { agentRootName } from "@/lib/forkHarness";
 
 export const WRAPPER_LABEL_KEY = "omnigent.wrapper";
 export const UI_MODE_LABEL_KEY = "omnigent.ui";
@@ -332,6 +333,35 @@ export function isNativeCodingAgent(
   agent: Pick<AvailableAgent, "name" | "harness"> | null | undefined,
 ): boolean {
   return nativeCodingAgentForAvailableAgent(agent) !== undefined;
+}
+
+/**
+ * Whether `agent` IS the vendor's own canonical native-terminal UI row — the
+ * seeded built-in (e.g. `claude-native-ui`) or a fork/switch clone of it —
+ * as opposed to a distinct, independently-named agent that merely EXECUTES
+ * via that vendor's harness (e.g. a custom orchestrator pinned to
+ * `claude-native` for accurate native cost billing rather than for its own
+ * identity). `nativeCodingAgentForAvailableAgent` resolves by harness alone,
+ * which is correct for behavior that genuinely follows from running that
+ * harness regardless of naming — permission-mode capabilities
+ * (`nativeAgentHasCapability`), `omnigent.wrapper` labels
+ * (`nativeWrapperLabelsForAgent`), native-terminal session handling
+ * (`isNativeTerminalSession`) — a custom agent on that harness really is
+ * running the vendor's native CLI and needs those wired up the same way.
+ *
+ * This stricter check is for IDENTITY/branding decisions instead: whether
+ * to collapse an agent into the vendor's generic harness-picker row, label
+ * it with the vendor's display name, or dedupe it against the seeded
+ * built-in. Use this — not `isNativeCodingAgent` — for those; using the
+ * harness-only check there mislabels any custom agent sharing a native
+ * harness as if it WERE that vendor's product.
+ */
+export function isCanonicalNativeCodingAgent(
+  agent: Pick<AvailableAgent, "name" | "harness"> | null | undefined,
+): boolean {
+  if (agent == null) return false;
+  const spec = nativeCodingAgentForAvailableAgent(agent);
+  return spec !== undefined && agentRootName(agent.name) === spec.agentName;
 }
 
 /**

@@ -5,7 +5,9 @@ import {
   UI_MODE_LABEL_KEY,
   UI_MODE_TERMINAL_VALUE,
   WRAPPER_LABEL_KEY,
+  isCanonicalNativeCodingAgent,
   isFullySupportedNativeCodingAgent,
+  isNativeCodingAgent,
   isNativePolicyName,
   isNativeTerminalSession,
   isNativeWrapper,
@@ -239,6 +241,40 @@ describe("isRecentHarness", () => {
     expect(isRecentHarness({ name: "polly", harness: "claude-sdk" }, ["claude-sdk"])).toBe(false);
     expect(isRecentHarness(null, ["pi-native"])).toBe(false);
     expect(isRecentHarness(pi, ["not-a-harness"])).toBe(false);
+  });
+});
+
+describe("isCanonicalNativeCodingAgent", () => {
+  it("is true for the seeded built-in row", () => {
+    expect(
+      isCanonicalNativeCodingAgent({ name: "claude-native-ui", harness: "claude-native" }),
+    ).toBe(true);
+  });
+
+  it("is true for a fork/switch clone of the built-in (root name still matches)", () => {
+    expect(
+      isCanonicalNativeCodingAgent({
+        name: "claude-native-ui (fork ag_abc123)",
+        harness: "claude-native",
+      }),
+    ).toBe(true);
+  });
+
+  // A custom agent pinned to a native harness for its own reasons (e.g. an
+  // orchestrator using claude-native for accurate native cost billing) is
+  // NOT the vendor's own product — it must not collapse into / mislabel as
+  // "Claude Code" in the picker, even though isNativeCodingAgent (harness
+  // alone) is true for it.
+  it("is false for a distinctly-named agent that merely executes via a native harness", () => {
+    const cvLab = { name: "cv-lab", harness: "claude-native" };
+    expect(isNativeCodingAgent(cvLab)).toBe(true);
+    expect(isCanonicalNativeCodingAgent(cvLab)).toBe(false);
+  });
+
+  it("is false for non-native agents and null", () => {
+    expect(isCanonicalNativeCodingAgent({ name: "polly", harness: "claude-sdk" })).toBe(false);
+    expect(isCanonicalNativeCodingAgent(null)).toBe(false);
+    expect(isCanonicalNativeCodingAgent(undefined)).toBe(false);
   });
 });
 

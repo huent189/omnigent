@@ -136,6 +136,7 @@ import { partitionAgentsByKind, sortAgentsForDisplay } from "@/lib/agentGrouping
 import { cn } from "@/lib/utils";
 import { isCurrentServerLocal } from "@/lib/serverOrigin";
 import {
+  isCanonicalNativeCodingAgent,
   isFullySupportedNativeCodingAgent,
   isNativeCodingAgent,
   isRecentHarness,
@@ -1915,14 +1916,21 @@ export function NewChatLandingScreen() {
 
   // Split the picker into "Harnesses" (the native terminal CLIs) and
   // "Agents" (SDK / bundle agents like Polly & Debby plus any custom
-  // user-registered agents). This is the isNativeCodingAgent split, NOT the
-  // builtins/customs split: Polly & Debby are built-ins but belong under
-  // "Agents", not "Harnesses".
+  // user-registered agents). This is the isCanonicalNativeCodingAgent split,
+  // NOT the builtins/customs split: Polly & Debby are built-ins but belong
+  // under "Agents", not "Harnesses". Uses the CANONICAL check (not the plain
+  // harness-only isNativeCodingAgent) so a custom agent merely EXECUTING via
+  // a native harness (e.g. an orchestrator pinned to claude-native for
+  // accurate billing) keeps its own identity in "Agents" instead of being
+  // folded into / mislabeling the vendor's generic harness row.
   const harnessEntries = useMemo(
-    () => agentList.filter((a) => isNativeCodingAgent(a)),
+    () => agentList.filter((a) => isCanonicalNativeCodingAgent(a)),
     [agentList],
   );
-  const agentEntries = useMemo(() => agentList.filter((a) => !isNativeCodingAgent(a)), [agentList]);
+  const agentEntries = useMemo(
+    () => agentList.filter((a) => !isCanonicalNativeCodingAgent(a)),
+    [agentList],
+  );
 
   // "Create custom agent" dialog state and pending bundle. When the user
   // creates a custom agent via the dialog, the bundle input is stored

@@ -120,7 +120,7 @@ vi.mock("@/lib/nativeCodingAgents", async (orig) => {
   const actual = await orig<typeof NativeCodingAgentsModule>();
   return {
     ...actual,
-    isNativeCodingAgent: (a: AvailableAgent) => a?.name === "claude-native-ui",
+    isCanonicalNativeCodingAgent: (a: AvailableAgent) => a?.name === "claude-native-ui",
     nativeAgentHasCapability: (a: AvailableAgent | undefined | null, cap: string) =>
       a?.name === "claude-native-ui" && cap === "permissionMode",
   };
