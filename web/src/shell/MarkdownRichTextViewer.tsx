@@ -45,6 +45,7 @@ import {
 import { createWorkspaceImageExtension, ImageAwareLink } from "./TipTapWorkspaceImage";
 import { GitHubAlertBlockquote } from "./TipTapGitHubAlert";
 import { HtmlPassthrough } from "./TipTapHtmlPassthrough";
+import { MathBlock, MathInline } from "./TipTapMath";
 import {
   installMarkdownParserPatch,
   installMarkdownSerializerPatch,
@@ -349,6 +350,8 @@ function MarkdownRichTextViewerInner({
       ImageAwareLink.configure({ openOnClick: false, autolink: false }),
       GitHubAlertBlockquote,
       HtmlPassthrough,
+      MathBlock,
+      MathInline,
       Markdown,
       createWorkspaceImageExtension(conversationId, path),
       createCommentDecorationExtension(commentStateRef),
